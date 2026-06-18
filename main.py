@@ -13,7 +13,7 @@ from pymongo import MongoClient
 # Yeh data Render ke Environment Variables se automatic utha lega
 API_ID = int(os.environ.get("API_ID", 39899558))  
 API_HASH = os.environ.get("API_HASH", "a412e0e1b2700bd8ede647a6ccb3177e")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8683394154:AAEGSwlc7r1g_8fhGRpaSxEbTdW1YkRFN6Y")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8997774923:AAGieuQneezw1UTgiKhYp2uRhwlE1RD4Xr4")
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb+srv://yadavakash3370_db_user:yjgpfGX9Zuqxv2&cluster0.jsdjgtz.mongodb.net/?appName=Cluster0")
 
 # Aapka official channel username (Bina @ ke)
