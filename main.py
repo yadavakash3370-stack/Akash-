@@ -26,7 +26,7 @@ users_col = db["users"]
 channels_col = db["channels"]
 
 # === Pyrogram Bot Client ===
-bot = Client("monitor_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+bot = Client("monitor_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
 
 # === Force Join Checker ===
 async def is_user_joined(client, message):
