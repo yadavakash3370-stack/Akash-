@@ -48,9 +48,8 @@ async def is_user_joined(client, message):
         print(f"Force Join Check Error: {e}")
         return True
 
-@bot.on_message(filters.command("start"), group=-1)
+@bot.on_message(filters.command("start"))
 async def start_handler(client, message):
-    message.stop_propagation()
     if not await is_user_joined(client, message):
         return
         
@@ -73,13 +72,12 @@ Main aapke channels ko monitor karne ke liye ready hu!
 /help - Help"""
     await message.reply(welcome)
 
-@bot.on_message(filters.command("add") | filters.command("list") | filters.command("remove") | filters.command("help"), group=-1)
+@bot.on_message(filters.command(["add", "list", "remove", "help"]))
 async def all_commands_handler(client, message):
-    message.stop_propagation()
     if not await is_user_joined(client, message):
         return
-    await message.reply("✅ Command received! Bot is working perfectly under your channel protection.")
-
+    await message.reply("✅ Command received!")
+    
 # === Flask Web Server (For Render) ===
 web = Flask('')
 
