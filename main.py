@@ -554,4 +554,195 @@ async def callback_handler(client, cb):
             user = get_user(user_id)
             until = user["premium_until"].strftime("%d %B %Y")
             await cb.answer(f"💎 Premium active hai! Till {until}", show_alert=True)
- 
+            return
+        btn = [
+            [InlineKeyboardButton(f"💳 Buy — ₹99/month", url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton("🔙 Back", callback_data="home")]
+        ]
+        await cb.message.edit(
+            "💎 **PREMIUM — ₹99/month**\n\n"
+            "✅ 1000+ channels monitor karo\n"
+            "✅ Real-time instant alerts\n"
+            "✅ Message backup (last 100)\n"
+            "✅ Priority support\n\n"
+            f"Payment ke liye: @{ADMIN_USERNAME}",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+    elif data == "help_menu":
+        btn = [[InlineKeyboardButton("🔙 Back", callback_data="home")]]
+        await cb.message.edit(
+            "📖 **Quick Help**\n\n"
+            "`/add @ch` — Channel add karo\n"
+            "`/list` — Channels dekho\n"
+            "`/remove @ch` — Remove karo\n"
+            "`/status @ch` — Check karo\n"
+            "`/keywords @ch w1,w2` — Keywords\n"
+            "`/premium` — Plan upgrade\n"
+            "`/me` — Profile dekho",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+    elif data == "home":
+        name = cb.from_user.first_name
+        await cb.message.edit(
+            home_text(name, user_id),
+            reply_markup=home_buttons(user_id)
+        )
+    await cb.answer()
+
+
+@bot.on_message(filters.channel & ~filters.scheduled)
+async def channel_msg_listener(client, message):
+    try:
+        chat = message.chat
+        username = getattr(chat, "username", None)
+        if not username:
+            return
+        username = username.lower()
+        text = (message.text or message.caption or "").lower()
+        if not text:
+            return
+        watchers = list(channels_col.find({
+            "username": username,
+            "keywords": {"$exists": True, "$ne": []},
+            "notify": True
+        }))
+        for watcher in watchers:
+            keywords = watcher.get("keywords", [])
+            matched = [kw for kw in keywords if kw in text]
+            if not matched:
+                continue
+            uid = watcher["user_id"]
+            kw_text = ", ".join([f"`{k}`" for k in matched])
+            preview = (message.text or message.caption or "")[:400]
+            if is_premium(uid):
+                messages_col.insert_one({
+                    "user_id": uid,
+                    "channel": username,
+                    "text": preview,
+                    "msg_id": message.id,
+                    "saved_at": datetime.now(),
+                })
+            await bot.send_message(
+                uid,
+                f"🔔 **Keyword Alert!**\n\n"
+                f"📢 **Channel:** @{username}\n"
+                f"🔑 **Matched:** {kw_text}\n\n"
+                f"📝 **Message:**\n{preview}"
+                f"{'...' if len(preview) >= 400 else ''}"
+            )
+    except Exception as e:
+        log.error(f"Channel listener error: {e}")
+
+
+async def monitor_loop():
+    await asyncio.sleep(30)
+    log.info("Background monitor started!")
+    while True:
+        try:
+            all_channels = list(channels_col.find({}))
+            log.info(f"Checking {len(all_channels)} channels...")
+            for ch in all_channels:
+                try:
+                    username = ch["username"]
+                    user_id = ch["user_id"]
+                    old_status = ch.get("last_status", "active")
+                    info = await fetch_channel_info(bot, username)
+                    new_status = "active" if info["alive"] else info.get("reason", "unknown")
+                    channels_col.update_one(
+                        {"_id": ch["_id"]},
+                        {"$set": {
+                            "last_checked": datetime.now(),
+                            "last_status": new_status,
+                            "members": info.get("members", ch.get("members", 0))
+                        }}
+                    )
+                    if new_status == old_status:
+                        await asyncio.sleep(1)
+                        continue
+                    notify = ch.get("notify", True)
+                    if new_status == "banned" and notify:
+                        await bot.send_message(
+                            user_id,
+                            f"🚨 **URGENT: Channel Ban Ho Gaya!**\n\n"
+                            f"📛 **Channel:** {ch.get('title', username)}\n"
+                            f"🔗 **Username:** @{username}\n"
+                            f"⏰ **Time:** {datetime.now().strftime('%d %b %Y, %I:%M %p')}\n\n"
+                            f"😔 Channel ab accessible nahi hai.\n\n"
+                            f"💎 **Premium** lo aur message backup feature use karo!\n"
+                            f"Contact: @{ADMIN_USERNAME}"
+                        )
+                    elif new_status == "deleted" and notify:
+                        await bot.send_message(
+                            user_id,
+                            f"⚠️ **Channel Delete Ho Gaya!**\n\n"
+                            f"🔗 @{username} ab exist nahi karta.\n"
+                            f"Monitoring list se hata diya gaya."
+                        )
+                        channels_col.delete_one({"_id": ch["_id"]})
+                    elif new_status == "active" and old_status != "active" and notify:
+                        await bot.send_message(
+                            user_id,
+                            f"✅ **Channel Wapas Active Ho Gaya!**\n\n"
+                            f"📛 **Channel:** {ch.get('title', username)}\n"
+                            f"🔗 **Username:** @{username}\n\n"
+                            f"Channel ab accessible hai!"
+                        )
+                    await asyncio.sleep(2)
+                except FloodWait as e:
+                    log.warning(f"FloodWait {e.value}s")
+                    await asyncio.sleep(e.value)
+                except Exception as e:
+                    log.error(f"Error checking @{ch.get('username')}: {e}")
+            log.info(f"Monitor cycle done. Next in {MONITOR_INTERVAL // 60} min.")
+            await asyncio.sleep(MONITOR_INTERVAL)
+        except Exception as e:
+            log.error(f"Monitor loop error: {e}")
+            await asyncio.sleep(60)
+
+
+web = Flask("")
+
+
+@web.route("/")
+def home_route():
+    try:
+        total_users = users_col.count_documents({})
+        premium_users = users_col.count_documents({"premium_until": {"$gt": datetime.now()}})
+        total_channels = channels_col.count_documents({})
+        active = channels_col.count_documents({"last_status": "active"})
+    except Exception:
+        total_users = premium_users = total_channels = active = "N/A"
+    return (
+        f"<h1>Channel Guardian Bot</h1>"
+        f"<p>Status: LIVE</p>"
+        f"<p>Users: {total_users}</p>"
+        f"<p>Premium: {premium_users}</p>"
+        f"<p>Channels: {total_channels}</p>"
+        f"<p>Active: {active}</p>"
+    )
+
+
+@web.route("/health")
+def health():
+    return {"status": "ok"}
+
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web.run(host="0.0.0.0", port=port)
+
+
+async def main():
+    log.info("Starting Channel Guardian Bot...")
+    await bot.start()
+    me = await bot.get_me()
+    log.info(f"Bot started: @{me.username}")
+    asyncio.create_task(monitor_loop())
+    await idle()
+    await bot.stop()
+
+
+if __name__ == "__main__":
+    Thread(target=run_web, daemon=True).start()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
