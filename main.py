@@ -18,8 +18,7 @@ log = logging.getLogger(__name__)
 
 API_ID = int(os.environ.get("API_ID", "39899558"))
 API_HASH = os.environ.get("API_HASH", "a412e0e1b2700bd8ede647a6ccb3177e")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8683394154:AAHBZB9TaNmxjAl5EQ03WoZ1UgnRgBaQEy8
-")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8683394154:AAHBZB9TaNmxjAl5EQ03WoZ1UgnRgBaQEy8")
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb+srv://yadavakash3370_db_user:yjggfGX9ZeuqxV2G@cluster0.jsdjgtr.mongodb.net/?appName=Cluster0")
 AUTH_CHANNEL = os.environ.get("AUTH_CHANNEL", "MOTIVATINALTHOUGHTS")
 ADMIN_IDS = [int(x) for x in os.environ.get("ADMIN_IDS", "8675781167").split(",") if x.strip().isdigit()]
